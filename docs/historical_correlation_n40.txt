@@ -1,0 +1,12 @@
+=== Historical Outcome Correlation (independent check) ===
+Total applicants with a recorded risk_score: 40
+  Historically defaulted (not_fully_paid=True): 2
+  Historically paid in full: 38
+
+Avg risk_score | historically DEFAULTED: 26.5
+Avg risk_score | historically PAID:       30.0
+
+Decision distribution | historically DEFAULTED: {'verified': 1, 'needs_review': 1}
+Decision distribution | historically PAID:       {'needs_review': 10, 'verified': 24, 'flagged': 4}
+
+Direction check: applicants who historically defaulted do NOT have a higher average risk_score in this sample -- worth investigating, not ignoring.
