@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Crosscheck</title>
+<style>
+  :root {
+    --verified: #1a7f37;
+    --flagged: #cf222e;
+    --review: #9a6700;
+    --bg: #f6f8fa;
+    --card: #ffffff;
+    --border: #d0d7de;
+    --text: #1f2328;
+    --muted: #59636e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    margin: 0;
+    padding: 40px 20px;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  .subtitle { color: var(--muted); margin-bottom: 28px; font-size: 14px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .input-row { display: flex; gap: 10px; }
+  input[type=number] {
+    flex: 1;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 15px;
+  }
+  button {
+    padding: 10px 18px;
+    border: none;
+    border-radius: 6px;
+    background: #1f2328;
+    color: white;
+    font-size: 15px;
+    cursor: pointer;
+  }
+  button:hover { background: #32383f; }
+  button:disabled { background: #8c959f; cursor: not-allowed; }
+  .badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 13px;
+    color: white;
+  }
+  .badge.verified { background: var(--verified); }
+  .badge.flagged { background: var(--flagged); }
+  .badge.needs_review { background: var(--review); }
+  .row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid #eee;
+    font-size: 14px;
+  }
+  .row:last-child { border-bottom: none; }
+  .row .label { color: var(--muted); }
+  .row .value { font-weight: 500; }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14px; }
+  th, td { text-align: left; padding: 8px; border-bottom: 1px solid #eee; }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; }
+  .justification {
+    background: #f6f8fa;
+    border-radius: 6px;
+    padding: 12px 14px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--muted);
+    margin-top: 12px;
+  }
+  .error { color: var(--flagged); font-size: 14px; }
+  .loading { color: var(--muted); font-size: 14px; }
+  .risk-score { font-size: 28px; font-weight: 700; }
+  .applicant-name { font-size: 18px; font-weight: 600; margin-bottom: 2px; }
+  .applicant-meta { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+  .top-row { display: flex; justify-content: space-between; align-items: flex-start; }
+  #history-list { font-size: 13px; color: var(--muted); }
+  #history-list div { padding: 6px 0; border-bottom: 1px solid #eee; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Crosscheck</h1>
+  <div class="subtitle">Income verification for loan underwriting</div>
+
+  <div class="card">
+    <div class="input-row">
+      <input type="number" id="app-id" placeholder="Application ID (e.g. 1)" value="1" />
+      <button id="verify-btn" onclick="runVerify()">Run Verification</button>
+    </div>
+  </div>
+
+  <div id="result-area"></div>
+</div>
+
+<script>
+async function runVerify() {
+  const appId = document.getElementById('app-id').value;
+  const btn = document.getElementById('verify-btn');
+  const resultArea = document.getElementById('result-area');
+
+  if (!appId) return;
+
+  btn.disabled = true;
+  btn.textContent = 'Running...';
+  resultArea.innerHTML = '<div class="card loading">Running full pipeline (Plaid + document parsing can take up to 30s)...</div>';
+
+  try {
+    const res = await fetch(`/applications/${appId}/verify`, { method: 'POST' });
+    const data = await res.json();
+
+    if (!res.ok) {
+      resultArea.innerHTML = `<div class="card error">Error: ${data.detail || 'Unknown error'}</div>`;
+      return;
+    }
+
+    resultArea.innerHTML = renderResult(data);
+  } catch (err) {
+    resultArea.innerHTML = `<div class="card error">Request failed: ${err.message}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Run Verification';
+  }
+}
+
+function fmtMoney(v) {
+  if (v === null || v === undefined) return '—';
+  return '$' + Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function fmtPct(v) {
+  if (v === null || v === undefined) return '—';
+  return v + '%';
+}
+
+function renderResult(data) {
+  const d = data.discrepancies || {};
+  const decisionLabel = (data.decision || '').replace('_', ' ');
+
+  return `
+    <div class="card">
+      <div class="top-row">
+        <div>
+          <div class="applicant-name">${data.applicant_name || 'Unknown'}</div>
+          <div class="applicant-meta">Employer: ${data.stated_employer || '—'} · FICO: ${data.fico || '—'} · DTI: ${data.dti || '—'}</div>
+        </div>
+        <span class="badge ${data.decision}">${decisionLabel}</span>
+      </div>
+
+      <div class="row">
+        <span class="label">Risk score</span>
+        <span class="risk-score">${data.risk_score ?? '—'}<span style="font-size:14px;color:var(--muted)">/100</span></span>
+      </div>
+
+      <table>
+        <tr><th>Source</th><th>Income</th><th>vs. Stated</th></tr>
+        <tr><td>Stated (application)</td><td>${fmtMoney(data.stated_income)}</td><td>—</td></tr>
+        <tr><td>Plaid (bank data)</td><td>${fmtMoney(data.plaid_estimated_income)}</td><td>${fmtPct(d.stated_vs_plaid_pct)}</td></tr>
+        <tr><td>Document (pay stub)</td><td>${fmtMoney(data.document_extracted_income)}</td><td>${fmtPct(d.stated_vs_document_pct)}</td></tr>
+      </table>
+
+      <div class="row" style="margin-top:8px">
+        <span class="label">Employer name match</span>
+        <span class="value">${d.employer_name_match ? 'Yes' : 'No'}</span>
+      </div>
+      <div class="row">
+        <span class="label">Plaid confidence</span>
+        <span class="value">${d.plaid_confidence || '—'}</span>
+      </div>
+      <div class="row">
+        <span class="label">Document confidence</span>
+        <span class="value">${d.document_confidence ?? '—'}</span>
+      </div>
+
+      <div class="justification">${data.justification || ''}</div>
+    </div>
+  `;
+}
+</script>
+</body>
+</html>
