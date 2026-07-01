@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: crosscheck_postgres
+    environment:
+      POSTGRES_DB: crosscheck
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./app/db/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - crosscheck_pgdata:/var/lib/postgresql/data
+
+volumes:
+  crosscheck_pgdata:
